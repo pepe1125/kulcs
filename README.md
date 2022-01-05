@@ -1,6 +1,3 @@
-<header>
-  {% include kulcs.php %}
-  <h2> Kulcs Kulcs Kulcs... </h2>
-</header>
-
 # Labor Kulcsok Loggere
+
+Ki vitte el a [KULCS](http://sp.myddns.me/kulcs/kulcs.php)-ot?
