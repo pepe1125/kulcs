@@ -1,10 +1,25 @@
 #include <SPI.h>
 #include <MFRC522.h>
+#include <Ethernet.h>
+
 #define SOLENOID 7
 #define NYIT bitSet(PORTD,7)
 #define ZAR  bitClear(PORTD,7)
 
 MFRC522 mfrc522(8, 9);   // Create MFRC522 instance
+
+byte mac[] = {
+  0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED
+};
+
+IPAddress ip(192, 168, 0, 51);
+IPAddress myDns(192, 168, 0, 1);
+EthernetClient client;
+
+char server[] = "sp.myddns.me";
+
+unsigned long lastConnectionTime = 0;           // last time you connected to the server, in milliseconds
+const unsigned long postingInterval = 10 * 1000; // delay between updates, in milliseconds
 
 bool key_state[16];
 bool state;
@@ -71,10 +86,38 @@ void setup() {
   pinMode(s1, OUTPUT);
   pinMode(s2, OUTPUT);
   pinMode(s3, OUTPUT);
+  pinMode(8, OUTPUT);
+  Serial.begin(9600);
+  SPI.begin();
+  mfrc522.PCD_Init();
+  digitalWrite(8, HIGH); //RFID
+  delay(100);
+  Ethernet.init(10);
 
-  Serial.begin(9600);                                           // Initialize serial communications with the PC
-  SPI.begin();                                                  // Init SPI bus
-  mfrc522.PCD_Init();                                              // Init MFRC522 card
+  // start the Ethernet connection:
+  Serial.println("Initialize Ethernet with DHCP:");
+  if (Ethernet.begin(mac) == 0) {
+    Serial.println("Failed to configure Ethernet using DHCP");
+    // Check for Ethernet hardware present
+    if (Ethernet.hardwareStatus() == EthernetNoHardware) {
+      Serial.println("Ethernet shield was not found.  Sorry, can't run without hardware. :(");
+      while (true) {
+        delay(1); // do nothing, no point running without Ethernet hardware
+      }
+    }
+    if (Ethernet.linkStatus() == LinkOFF) {
+      Serial.println("Ethernet cable is not connected.");
+    }
+    // try to congifure using IP address instead of DHCP:
+    Ethernet.begin(mac, ip, myDns);
+    Serial.print("My IP address: ");
+    Serial.println(Ethernet.localIP());
+  } else {
+    Serial.print("  DHCP assigned IP ");
+    Serial.println(Ethernet.localIP());
+  }
+  // give the Ethernet shield a second to initialize:
+  delay(1000);
 
   for (byte i = 0; i < 3; i++) {
     NYIT;
@@ -86,7 +129,7 @@ void setup() {
 }
 
 void loop() {
-
+  digitalWrite(8, HIGH);
   if (!state) {
     for (uint8_t i = 0; i < 16; i++) {
       key_state[i] = readMux(i);
@@ -120,9 +163,10 @@ void loop() {
   }
 
   //mfrc522.PICC_DumpDetailsToSerial(&(mfrc522.uid)); //dump some details about the card
-
+  String tag;
   for (uint8_t i = 0; i < mfrc522.uid.size; i++) {
     user[i] = mfrc522.uid.uidByte[i];
+    tag += user[i];
     Serial.print(user[i], HEX);
     Serial.print(" ");
   }
@@ -200,6 +244,41 @@ void loop() {
   mfrc522.PICC_HaltA();
   mfrc522.PCD_StopCrypto1();
 
+  digitalWrite(8, HIGH); // RFID OFF
+  delay(100);
+  Ethernet.init(10);
+
+
+  httpRequest(tag);
+  //Serial.println(tag);
+  delay(1000);
+
   ZAR;
 
+}
+
+void httpRequest(String tag) {
+  // close any connection before send a new request.
+  // This will free the socket on the WiFi shield
+  client.stop();
+
+  // if there's a successful connection:
+  if (client.connect(server, 80)) {
+    Serial.println("connecting...");
+    // send the HTTP GET request:
+    client.print("GET /kulcs/data.php?");
+    client.print("tag=");
+    client.print(tag);
+    client.println(" HTTP/1.1");
+    client.println("Host: sp.myddns.me");
+    client.println("User-Agent: arduino-ethernet");
+    client.println("Connection: close");
+    client.println();
+
+    // note the time that the connection was made:
+    lastConnectionTime = millis();
+  } else {
+    // if you couldn't make a connection:
+    Serial.println("connection failed");
+  }
 }
