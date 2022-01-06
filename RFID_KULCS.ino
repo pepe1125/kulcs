@@ -11,7 +11,7 @@
 MFRC522 mfrc522(8, 9);   // Create MFRC522 instance
 
 byte mac[] = {
-  0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED
+  0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF
 };
 
 IPAddress ip(192, 168, 0, 51);
@@ -89,37 +89,31 @@ void setup() {
   pinMode(s2, OUTPUT);
   pinMode(s3, OUTPUT);
   pinMode(8, OUTPUT);
-  Serial.begin(9600);
+ 
+  Serial.begin(57600);
   SPI.begin();
   mfrc522.PCD_Init();
-  digitalWrite(8, HIGH); //RFID
-  delay(100);
-  Ethernet.init(10);
 
+  Ethernet.init(10);
   // start the Ethernet connection:
-  Serial.println("Initialize Ethernet with DHCP:");
+  Serial.print("ETH ");
   if (Ethernet.begin(mac) == 0) {
-    Serial.println("Failed to configure Ethernet using DHCP");
+    Serial.println("Fail DHCP");
     // Check for Ethernet hardware present
     if (Ethernet.hardwareStatus() == EthernetNoHardware) {
-      Serial.println("Ethernet shield was not found.  Sorry, can't run without hardware. :(");
-      while (true) {
-        delay(1); // do nothing, no point running without Ethernet hardware
-      }
+      Serial.println("HW error!");
     }
     if (Ethernet.linkStatus() == LinkOFF) {
-      Serial.println("Ethernet cable is not connected.");
+      Serial.println("cable not connected");
     }
     // try to congifure using IP address instead of DHCP:
     Ethernet.begin(mac, ip, myDns);
-    Serial.print("My IP address: ");
+    Serial.print("IP: ");
     Serial.println(Ethernet.localIP());
   } else {
-    Serial.print("  DHCP assigned IP ");
+    Serial.print("DHCP IP ");
     Serial.println(Ethernet.localIP());
   }
-  // give the Ethernet shield a second to initialize:
-  delay(1000);
 
   for (byte i = 0; i < 3; i++) {
     NYIT;
@@ -166,14 +160,12 @@ void loop() {
     return;
   }
 
-  //mfrc522.PICC_DumpDetailsToSerial(&(mfrc522.uid)); //dump some details about the card
-  String tag;
+  String tag = "";
   for (uint8_t i = 0; i < mfrc522.uid.size; i++) {
     user[i] = mfrc522.uid.uidByte[i];
-    tag += user[i];
-    Serial.print(user[i], HEX);
-    Serial.print(" ");
+    tag += String(user[i], HEX);
   }
+  Serial.print(tag);
 
   uint8_t auth = 0;
   for (uint8_t i = 0; i < 4; i++) {
@@ -184,21 +176,21 @@ void loop() {
 
   if (auth > 3) {
     NYIT;
+    tone(7, 100, 200);
+    delay(220);
     auth = 0;
   }
   else {
-    tone(7, 50, 200);
+    tone(7, 50, 250);
   }
-
-  //mfrc522.PICC_DumpToSerial(&(mfrc522.uid));      //uncomment this to see all blocks in hex
 
   uint8_t buffer1[18];
   block = 4;
   len = 18;
 
-  status = mfrc522.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, 4, &key, &(mfrc522.uid)); //line 834 of MFRC522.cpp file
+  status = mfrc522.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, 4, &key, &(mfrc522.uid));
   if (status != MFRC522::STATUS_OK) {
-    Serial.print(F("Authentication failed: "));
+    Serial.print(F("fail: "));
     Serial.println(mfrc522.GetStatusCodeName(status));
     delay(100);
     tone(7, 50, 200);
@@ -213,8 +205,8 @@ void loop() {
   if (status != MFRC522::STATUS_OK) {
     Serial.print(F("Reading failed: "));
     Serial.println(mfrc522.GetStatusCodeName(status));
-    delay(100);
     tone(7, 50, 200);
+    delay(250);
     mfrc522.PCD_Reset();
     mfrc522.PCD_Init();
     StopCard;
@@ -239,8 +231,8 @@ void loop() {
   if (status != MFRC522::STATUS_OK) {
     Serial.print(F("Authentication failed: "));
     Serial.println(mfrc522.GetStatusCodeName(status));
-    delay(100);
     tone(7, 50, 200);
+    delay(250);
     mfrc522.PCD_Reset();
     mfrc522.PCD_Init();
     StopCard;
@@ -252,8 +244,8 @@ void loop() {
   if (status != MFRC522::STATUS_OK) {
     Serial.print(F("Reading failed: "));
     Serial.println(mfrc522.GetStatusCodeName(status));
-    delay(100);
     tone(7, 50, 200);
+    delay(250);
     mfrc522.PCD_Reset();
     mfrc522.PCD_Init();
     StopCard;
@@ -268,18 +260,15 @@ void loop() {
   Serial.println();
 
   delay(1000); //change value if you want to read cards faster
-
   StopCard;
   StopCrypto;
 
   digitalWrite(8, HIGH); // RFID OFF
-  delay(100);
+  delay(20);
+
   Ethernet.init(10);
-
   httpRequest(tag);
-
-  delay(1000);
-
+  delay(440);
   ZAR;
 
 }
@@ -300,12 +289,12 @@ void httpRequest(String http_tag) {
     client.println("User-Agent: arduino-ethernet");
     client.println("Connection: close");
     client.println();
-    Serial.println("Success");
+    Serial.println("SEND");
 
     // note the time that the connection was made:
     lastConnectionTime = millis();
   } else {
     // if you couldn't make a connection:
-    Serial.println("connection failed");
+    Serial.println("failed");
   }
 }
