@@ -1,33 +1,43 @@
+// KULCSnyilvántartó szekrény v2.0
+
 #include <SPI.h>
 #include <MFRC522.h>
 #include <Ethernet.h>
+#include "RTClib.h"
+#include <AT24Cxx.h>
+
+RTC_DS3231 rtc;
+AT24Cxx eep(0x57, 32);
+MFRC522 mfrc522(8, 9);   // Create MFRC522 instance
 
 #define SOLENOID 7
+#define DOOR 15
 #define NYIT bitSet(PORTD,7)
 #define ZAR  bitClear(PORTD,7)
 #define StopCard mfrc522.PICC_HaltA()
 #define StopCrypto mfrc522.PCD_StopCrypto1()
 
-MFRC522 mfrc522(8, 9);   // Create MFRC522 instance
-
 byte mac[] = {
   0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF
 };
 
-IPAddress ip(192, 168, 0, 51);
-IPAddress myDns(192, 168, 0, 1);
+IPAddress ip(192, 168, 88, 188);
+IPAddress myDns(192, 168, 88, 1);
 EthernetClient client;
 
 char server[] = "sp.myddns.me";
 
 unsigned long lastConnectionTime = 0;           // last time you connected to the server, in milliseconds
-const unsigned long postingInterval = 10 * 1000; // delay between updates, in milliseconds
+const unsigned long postingInterval = 3000;     // delay between updates, in milliseconds
 
 bool key_state[16];
 bool state;
 byte kulcs;
 byte user[4];
 byte sp[4] = {0x20, 0xFF, 0xBE, 0x4F};
+
+int address = 0;
+byte value;
 
 //Mux control pins
 const int s0 = 2;
@@ -89,10 +99,19 @@ void setup() {
   pinMode(s2, OUTPUT);
   pinMode(s3, OUTPUT);
   pinMode(8, OUTPUT);
- 
+  pinMode(DOOR, INPUT_PULLUP);
+
   Serial.begin(57600);
   SPI.begin();
   mfrc522.PCD_Init();
+  if (! rtc.begin()) {
+    Serial.println("RTC problem");
+    Serial.flush();
+  }
+  // January 21, 2014 at 3am you would call:
+  // rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
+
+  while (!digitalRead(DOOR));
 
   Ethernet.init(10);
   // start the Ethernet connection:
@@ -122,9 +141,17 @@ void setup() {
     delay(50);
   }
 
+  for (uint8_t i = 0; i < 4; i++) {
+    eep.update(i, (uint8_t)sp[i]);
+    // Serial.print(sp[i], HEX);
+  }
+
 }
 
 void loop() {
+
+  while (!digitalRead(DOOR));
+
   digitalWrite(8, HIGH);
   if (!state) {
     for (uint8_t i = 0; i < 16; i++) {
@@ -160,28 +187,52 @@ void loop() {
     return;
   }
 
+  DateTime now = rtc.now();
+
+  Serial.print(now.year());
+  Serial.print('/');
+  Serial.print(now.month());
+  Serial.print('/');
+  Serial.print(now.day());
+  Serial.print(" ");
+  Serial.print(now.hour());
+  Serial.print(':');
+  Serial.print(now.minute());
+  Serial.print(':');
+  Serial.print(now.second());
+  Serial.print(" ");
+
   String tag = "";
   for (uint8_t i = 0; i < mfrc522.uid.size; i++) {
     user[i] = mfrc522.uid.uidByte[i];
     tag += String(user[i], HEX);
   }
-  Serial.print(tag);
+  //Serial.println(tag);
+
+
 
   uint8_t auth = 0;
   for (uint8_t i = 0; i < 4; i++) {
+    value = eep.read((uint8_t)i);
+    Serial.print(value, HEX);
     if (user[i] == sp[i]) {
       auth++;
     }
   }
 
   if (auth > 3) {
-    NYIT;
     tone(7, 100, 200);
     delay(220);
+    NYIT;
+    Serial.print(" UNLOCK: ");
     auth = 0;
   }
   else {
     tone(7, 50, 250);
+    StopCard;
+    StopCrypto;
+    Serial.println(" LOCKED!");
+    return;
   }
 
   uint8_t buffer1[18];
@@ -259,17 +310,19 @@ void loop() {
   }
   Serial.println();
 
-  delay(1000); //change value if you want to read cards faster
+  delay(400); //change value if you want to read cards faster
   StopCard;
   StopCrypto;
 
   digitalWrite(8, HIGH); // RFID OFF
-  delay(20);
+  while (digitalRead(DOOR));
+  delay(600);
+
+  ZAR;
 
   Ethernet.init(10);
   httpRequest(tag);
   delay(440);
-  ZAR;
 
 }
 
