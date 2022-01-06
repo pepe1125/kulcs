@@ -5,6 +5,8 @@
 #define SOLENOID 7
 #define NYIT bitSet(PORTD,7)
 #define ZAR  bitClear(PORTD,7)
+#define StopCard mfrc522.PICC_HaltA()
+#define StopCrypto mfrc522.PCD_StopCrypto1()
 
 MFRC522 mfrc522(8, 9);   // Create MFRC522 instance
 
@@ -153,11 +155,13 @@ void loop() {
   MFRC522::StatusCode status;
 
   // Reset the loop if no new card present on the sensor/reader. This saves the entire process when idle.
+  StopCrypto;
   if ( ! mfrc522.PICC_IsNewCardPresent()) {
     return;
   }
 
   // Select one of the cards
+  StopCrypto;
   if ( ! mfrc522.PICC_ReadCardSerial()) {
     return;
   }
@@ -196,6 +200,12 @@ void loop() {
   if (status != MFRC522::STATUS_OK) {
     Serial.print(F("Authentication failed: "));
     Serial.println(mfrc522.GetStatusCodeName(status));
+    delay(100);
+    tone(7, 50, 200);
+    mfrc522.PCD_Reset();
+    mfrc522.PCD_Init();
+    StopCard;
+    StopCrypto;
     return;
   }
 
@@ -203,6 +213,12 @@ void loop() {
   if (status != MFRC522::STATUS_OK) {
     Serial.print(F("Reading failed: "));
     Serial.println(mfrc522.GetStatusCodeName(status));
+    delay(100);
+    tone(7, 50, 200);
+    mfrc522.PCD_Reset();
+    mfrc522.PCD_Init();
+    StopCard;
+    StopCrypto;
     return;
   }
 
@@ -223,6 +239,12 @@ void loop() {
   if (status != MFRC522::STATUS_OK) {
     Serial.print(F("Authentication failed: "));
     Serial.println(mfrc522.GetStatusCodeName(status));
+    delay(100);
+    tone(7, 50, 200);
+    mfrc522.PCD_Reset();
+    mfrc522.PCD_Init();
+    StopCard;
+    StopCrypto;
     return;
   }
 
@@ -230,6 +252,12 @@ void loop() {
   if (status != MFRC522::STATUS_OK) {
     Serial.print(F("Reading failed: "));
     Serial.println(mfrc522.GetStatusCodeName(status));
+    delay(100);
+    tone(7, 50, 200);
+    mfrc522.PCD_Reset();
+    mfrc522.PCD_Init();
+    StopCard;
+    StopCrypto;
     return;
   }
 
@@ -239,41 +267,40 @@ void loop() {
   }
   Serial.println();
 
-  delay(2000); //change value if you want to read cards faster
+  delay(1000); //change value if you want to read cards faster
 
-  mfrc522.PICC_HaltA();
-  mfrc522.PCD_StopCrypto1();
+  StopCard;
+  StopCrypto;
 
   digitalWrite(8, HIGH); // RFID OFF
   delay(100);
   Ethernet.init(10);
 
-
   httpRequest(tag);
-  //Serial.println(tag);
+
   delay(1000);
 
   ZAR;
 
 }
 
-void httpRequest(String tag) {
+void httpRequest(String http_tag) {
   // close any connection before send a new request.
   // This will free the socket on the WiFi shield
   client.stop();
 
   // if there's a successful connection:
   if (client.connect(server, 80)) {
-    Serial.println("connecting...");
     // send the HTTP GET request:
     client.print("GET /kulcs/data.php?");
     client.print("tag=");
-    client.print(tag);
+    client.print(http_tag);
     client.println(" HTTP/1.1");
     client.println("Host: sp.myddns.me");
     client.println("User-Agent: arduino-ethernet");
     client.println("Connection: close");
     client.println();
+    Serial.println("Success");
 
     // note the time that the connection was made:
     lastConnectionTime = millis();
