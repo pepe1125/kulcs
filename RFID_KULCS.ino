@@ -152,23 +152,6 @@ void loop() {
 
   while (!digitalRead(DOOR));
 
-  digitalWrite(8, HIGH);
-  if (!state) {
-    for (uint8_t i = 0; i < 16; i++) {
-      key_state[i] = readMux(i);
-      Serial.print(key_state[i]);
-      Serial.print("\t");
-    }
-    Serial.println();
-    state = true;
-  }
-
-  for (uint8_t i = 0; i < 16; i++) {
-    if (key_state[i] != readMux(i)) {
-      state = false;
-    }
-  }
-
   MFRC522::MIFARE_Key key;
   for (uint8_t i = 0; i < 6; i++) key.keyByte[i] = 0xFF;
   uint8_t block;
@@ -316,8 +299,32 @@ void loop() {
 
   digitalWrite(8, HIGH); // RFID OFF
   while (digitalRead(DOOR));
-  delay(600);
+  delay(400);
 
+  while (!digitalRead(DOOR)) {
+    digitalWrite(8, HIGH);
+    if (!state) {
+      for (uint8_t i = 0; i < 16; i++) {
+        key_state[i] = readMux(i);
+      }
+      for (uint8_t j = 0; j < 4; j++) {
+        for (uint8_t i = 0; i < 16; i += 4) {
+          Serial.print(key_state[i + j]);
+          Serial.print("_");
+        }
+        Serial.println();
+      }
+      Serial.println();
+      state = true;
+    }
+
+    for (uint8_t i = 0; i < 16; i++) {
+      if (key_state[i] != readMux(i)) {
+        state = false;
+      }
+    }
+  }
+  delay(200);
   ZAR;
 
   Ethernet.init(10);
